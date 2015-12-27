@@ -1,0 +1,80 @@
+---
+title: "Exercise Manner Prediction"
+author: "Xiao Wu"
+date: "December 27, 2015"
+output: html_document
+---
+
+###Executive Summary
+This study used data from devices such as Jawbone Up, Nike FuelBand, and Fitbit to quantify how well people are doing exercises. By studying accelerometers's data on the belt, forearm, arm, and dumbell, the study managed to build a model to predict the manner in which people do their exercises.    
+
+####Load and Clean Data
+```{r load, echo=TRUE, cache=TRUE}
+library(caret)
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```  
+``` {r clean, echo=TRUE}
+# view dimensions of the training dataset and check names of variables
+dim(training)
+# subset dataset with appropriate data (summarized accelerometer data)
+list <- c(8:11, 46:49, 84:86, 102, 122:124, 140, 160)
+training_sub <- training[,list]
+testing_sub <- testing[,list]
+names(training_sub)
+```
+    
+60% of the training data are used as training dataset, 40% as test dataset, with the 20 given test dataset for validation only.
+``` {r slice, echo=TRUE, cache=TRUE}
+inTrain <- createDataPartition(y=training_sub$classe, p=0.6, list=FALSE)
+training_60 <- training_sub[inTrain,]
+training_40 <- training_sub[-inTrain,]
+# check dimension again:
+dim(training_60)
+dim(training_40)
+```
+    
+So now we are going to use 11776 observations as training dataset, 7846 as testing dataset, and 16 predictors to build a model, in order to predict the given 20 test cases.    
+
+Since the model will not be linear, random forest and boosting are two models that seems to have a better chance, given their advantages in accuracy.    
+
+Therefore I'd like to build both models and compare them later to see which one is better. PCA(principal components analysis) preprocessing is used to simplify variables.    
+``` {r model_rf, echo=TRUE, message=FALSE, warning=FALSE, cache=TRUE}
+model_rf <- train(classe ~ ., data = training_60, preProcess = "pca", method = "rf")
+predict_rf <- predict(model_rf, testing_sub)
+```
+``` {r model_gbm, echo=TRUE, message=FALSE, warning=FALSE, cache=TRUE}
+model_gbm <- train(classe ~ ., data = training_60, preProcess = "pca", method = "gbm", verbose = FALSE)
+predict_gbm <- predict(model_gbm, testing_sub)
+```
+
+### Model Selection    
+We can then compare the two sets of predictions    
+``` {r comparison, echo=TRUE}
+table(predict_rf, predict_gbm)
+```
+We can see that the two models agree on most of the classes with some discrepancies.    
+
+Now let's take a further look at both models and find the one with better accuracy.    
+``` {r model, echo=TRUE}
+model_rf$results
+model_gbm$results
+```
+From the accuracy rate, we can tell that random forest is more accurate in this case, thus we are going to use the prediction from the random forest model.
+
+### Results
+``` {r result, echo=TRUE}
+predict_rf
+```
+
+### Error Rate
+#### In Sample Error
+``` {r in_error, echo=TRUE, cache=TRUE}
+test <- predict(model_rf, training_40[,1:16])
+confusionMatrix(test, training_40[,17])
+```
+The Accuracy rate is 0.93333, thus the in sample error rate is around 6.7%    
+
+#### Out of Sample Error
+Since the random forest model used mtry=2, the model accuracy rate is 0.9090, out of sample error rate is around 9.1%
+
